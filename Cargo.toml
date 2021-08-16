@@ -13,4 +13,11 @@ keywords = ["lexer", "no_std"]
 categories = ["parsing"]
 
 [dependencies]
+logos = { version = "0.12.0", default-features = false }
+
+[dev-dependencies]
 logos = "0.12.0"
+
+[features]
+default = ["std"]
+std = ["logos/std"]

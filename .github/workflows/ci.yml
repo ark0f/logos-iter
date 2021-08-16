@@ -36,6 +36,11 @@ jobs:
           toolchain: stable
           override: true
           components: clippy
+      - name: Check (no default features)
+        uses: actions-rs/clippy-check@v1
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          args: --all-targets --no-default-features -- -D warnings
       - name: Check
         uses: actions-rs/clippy-check@v1
         with:
