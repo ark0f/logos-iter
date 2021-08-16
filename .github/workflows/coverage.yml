@@ -1,0 +1,41 @@
+name: Coverage
+on:
+  push:
+  pull_request:
+
+jobs:
+  coverage:
+    name: Coverage
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+      - name: Install nightly toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: nightly
+          override: true
+          components: llvm-tools-preview
+      - name: Install grcov
+        run: curl -L https://github.com/mozilla/grcov/releases/latest/download/grcov-linux-x86_64.tar.bz2 | tar jxf -
+      - name: Install rust-covfix
+        run: |
+          curl -L https://github.com/Kogia-sima/rust-covfix/releases/download/v0.2.2/rust-covfix-linux-x86_64.tar.xz | tar Jxf -
+          mv rust-covfix-linux-x86_64/rust-covfix ./
+      - name: Prepare
+        run: |
+          cargo build --all-targets --all-features
+          cargo test --all-targets --all-features --no-fail-fast
+        env:
+          RUSTFLAGS: -Zinstrument-coverage
+          LLVM_PROFILE_FILE: "logos-iter-%p-%m.profraw"
+      - name: Aggregate
+        run: ./grcov . --binary-path ./target/debug/ -s . -t lcov --branch --ignore-not-existing --ignore "/*" --ignore "**/examples/*" -o ./lcov.info
+      - name: Fix coverage info
+        run: ./rust-covfix -o lcov.info lcov.info
+      - name: Publish
+        uses: codecov/codecov-action@v1
+        with: 
+          token: ${{ secrets.CODECOV_TOKEN }} 
+          file: ./lcov.info
