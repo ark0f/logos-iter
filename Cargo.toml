@@ -4,7 +4,13 @@ version = "0.1.0"
 edition = "2018"
 authors = ["Arsenii Lyashenko <arsenylyashenko.3@gmail.com>"]
 license = "MIT OR Apache-2.0"
-include = ["Cargo.toml", "LICENSE-*.md", "src/**/*"]
+include = ["Cargo.toml", "LICENSE-*.md", "src/**/*", "README.md"]
+description = "Extensions for Logos lexer"
+repository = "https://github.com/ark0f/logos-iter"
+readme = "README.md"
+documentation = "https://docs.rs/ark0f/logos-iter"
+keywords = ["lexer", "no_std"]
+categories = ["parsing"]
 
 [dependencies]
 logos = "0.12.0"
