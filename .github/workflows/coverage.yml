@@ -35,7 +35,6 @@ jobs:
       - name: Fix coverage info
         run: ./rust-covfix -o lcov.info lcov.info
       - name: Publish
-        uses: codecov/codecov-action@v1
+        uses: codecov/codecov-action@v2
         with: 
-          token: ${{ secrets.CODECOV_TOKEN }} 
-          file: ./lcov.info
+          files: ./lcov.info
