@@ -26,6 +26,8 @@ where
     fn extras_mut(&mut self) -> &mut T::Extras;
 
     /// See [`PeekableLexer`].
+    // we don't use `peekable` name to avoid ambiguity (it's a compiler error)
+    // between `LogosIter`'s method and `Iterator`'s one
     fn peekable_lexer(self) -> PeekableLexer<'source, Self, T>
     where
         Self: Sized,
