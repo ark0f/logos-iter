@@ -274,8 +274,12 @@ where
 
 #[cfg(test)]
 mod tests {
+    extern crate alloc;
+
     use super::*;
     use logos::Lexer;
+
+    use alloc::{vec, vec::Vec};
 
     #[derive(Debug, Logos, PartialEq, Eq, Copy, Clone)]
     enum Token {
