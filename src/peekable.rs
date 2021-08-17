@@ -50,6 +50,7 @@ where
     T: Logos<'source>,
 {
     token: Option<T>,
+    prev_span: Span,
     span: Span,
     remainder: &'source <T::Source as Source>::Slice,
 }
@@ -61,6 +62,7 @@ where
     fn clone(&self) -> Self {
         Self {
             token: self.token.clone(),
+            prev_span: self.span.clone(),
             span: self.span.clone(),
             remainder: self.remainder,
         }
@@ -75,6 +77,7 @@ where
     fn peek_impl(&mut self) -> &mut Peeked<'source, T> {
         let lexer = &mut self.lexer;
         self.peeked.get_or_insert_with(|| Peeked {
+            prev_span: lexer.span(),
             token: lexer.next(),
             span: lexer.span(),
             remainder: lexer.remainder(),
@@ -104,6 +107,8 @@ where
     }
 
     pub fn next_if(&mut self, func: impl FnOnce(&T) -> bool) -> Option<T> {
+        let prev_span = self.span();
+
         match self.next() {
             Some(matched) if func(&matched) => Some(matched),
             other => {
@@ -111,6 +116,7 @@ where
                 assert!(self.peeked.is_none());
                 self.peeked = Some(Peeked {
                     token: other,
+                    prev_span,
                     span: self.lexer.span(),
                     remainder: self.lexer.remainder(),
                 });
@@ -238,12 +244,23 @@ where
     fn remainder(&self) -> &'source <T::Source as logos::Source>::Slice {
         match &self.peeked {
             None => self.lexer.remainder(),
-            Some(Peeked { remainder, .. }) => *remainder,
+            Some(Peeked { prev_span, .. }) => {
+                let source = self.lexer.source();
+                // SAFETY: span is in range of source
+                unsafe { source.slice_unchecked(prev_span.end..source.len()) }
+            }
         }
     }
 
     fn bump(&mut self, n: usize) {
-        self.lexer.bump(n)
+        match self.peeked.take() {
+            None => self.lexer.bump(n),
+            Some(Peeked { span, .. }) => {
+                let token_len = span.end - span.start;
+                let n = n - token_len;
+                self.lexer.bump(n);
+            }
+        }
     }
 
     fn extras(&self) -> &T::Extras {
@@ -294,49 +311,103 @@ mod tests {
     }
 
     #[test]
+    fn test_lexer_bump() {
+        // `heart` 2 spaces `of` 3 spaces `gold`
+        const XS: &str = "heart  of   gold";
+
+        // peek and bump
+        let mut it = make_it(XS);
+        assert_eq!(it.peek(), Some(&Token::Heart));
+        it.bump(5);
+        assert_eq!(it.peek(), Some(&Token::Of));
+        assert_eq!(it.remainder(), "  of   gold");
+        assert_eq!(it.next(), Some(Token::Of));
+        assert_eq!(it.remainder(), "   gold");
+
+        // bump
+        let mut it = make_it(XS);
+        it.bump(5);
+        assert_eq!(it.remainder(), "  of   gold");
+        assert_eq!(it.next(), Some(Token::Of));
+
+        // next and bump
+        let mut it = make_it(XS);
+        assert_eq!(it.next(), Some(Token::Heart));
+        it.bump(4); // `  of`
+        assert_eq!(it.remainder(), "   gold");
+        assert_eq!(it.next(), Some(Token::Gold));
+    }
+
+    #[test]
     fn test_lexer_peekable() {
-        const XS: &str = "0 1 2 3 4 5";
+        const XS: &str = "0 1 2 3 4 5 heart of gold";
         let mut it = make_it(XS);
 
+        assert_eq!(it.remainder(), XS);
         assert_eq!(it.peek().unwrap(), &Token::Zero);
         assert_eq!(it.peek_slice(), "0");
         assert_eq!(it.peek_span(), 0..1);
-        assert_eq!(it.peek_remainder(), " 1 2 3 4 5");
+        assert_eq!(it.peek_remainder(), " 1 2 3 4 5 heart of gold");
+        assert_eq!(it.remainder(), XS);
         assert_eq!(it.next().unwrap(), Token::Zero);
         assert_eq!(it.slice(), "0");
         assert_eq!(it.span(), 0..1);
-        assert_eq!(it.remainder(), " 1 2 3 4 5");
+        assert_eq!(it.remainder(), " 1 2 3 4 5 heart of gold");
         assert_eq!(it.next().unwrap(), Token::One);
         assert_eq!(it.slice(), "1");
         assert_eq!(it.span(), 2..3);
-        assert_eq!(it.remainder(), " 2 3 4 5");
+        assert_eq!(it.remainder(), " 2 3 4 5 heart of gold");
         assert_eq!(it.next().unwrap(), Token::Two);
         assert_eq!(it.slice(), "2");
         assert_eq!(it.span(), 4..5);
-        assert_eq!(it.remainder(), " 3 4 5");
+        assert_eq!(it.remainder(), " 3 4 5 heart of gold");
         assert_eq!(it.peek().unwrap(), &Token::Three);
         assert_eq!(it.peek_slice(), "3");
         assert_eq!(it.peek_span(), 6..7);
-        assert_eq!(it.peek_remainder(), " 4 5");
+        assert_eq!(it.peek_remainder(), " 4 5 heart of gold");
         assert_eq!(it.peek().unwrap(), &Token::Three);
         assert_eq!(it.peek_slice(), "3");
         assert_eq!(it.peek_span(), 6..7);
-        assert_eq!(it.peek_remainder(), " 4 5");
+        assert_eq!(it.peek_remainder(), " 4 5 heart of gold");
         assert_eq!(it.next().unwrap(), Token::Three);
         assert_eq!(it.slice(), "3");
         assert_eq!(it.span(), 6..7);
-        assert_eq!(it.remainder(), " 4 5");
+        assert_eq!(it.remainder(), " 4 5 heart of gold");
         assert_eq!(it.next().unwrap(), Token::Four);
         assert_eq!(it.slice(), "4");
         assert_eq!(it.span(), 8..9);
-        assert_eq!(it.remainder(), " 5");
+        assert_eq!(it.remainder(), " 5 heart of gold");
         assert_eq!(it.peek().unwrap(), &Token::Five);
         assert_eq!(it.peek_slice(), "5");
         assert_eq!(it.peek_span(), 10..11);
-        assert_eq!(it.peek_remainder(), "");
+        assert_eq!(it.peek_remainder(), " heart of gold");
         assert_eq!(it.next().unwrap(), Token::Five);
         assert_eq!(it.slice(), "5");
         assert_eq!(it.span(), 10..11);
+        assert_eq!(it.remainder(), " heart of gold");
+        assert_eq!(it.peek().unwrap(), &Token::Heart);
+        assert_eq!(it.peek_slice(), "heart");
+        assert_eq!(it.peek_span(), 12..17);
+        assert_eq!(it.peek_remainder(), " of gold");
+        assert_eq!(it.next().unwrap(), Token::Heart);
+        assert_eq!(it.slice(), "heart");
+        assert_eq!(it.span(), 12..17);
+        assert_eq!(it.remainder(), " of gold");
+        assert_eq!(it.peek().unwrap(), &Token::Of);
+        assert_eq!(it.peek_slice(), "of");
+        assert_eq!(it.peek_span(), 18..20);
+        assert_eq!(it.peek_remainder(), " gold");
+        assert_eq!(it.next().unwrap(), Token::Of);
+        assert_eq!(it.slice(), "of");
+        assert_eq!(it.span(), 18..20);
+        assert_eq!(it.remainder(), " gold");
+        assert_eq!(it.peek().unwrap(), &Token::Gold);
+        assert_eq!(it.peek_slice(), "gold");
+        assert_eq!(it.peek_span(), 21..25);
+        assert_eq!(it.peek_remainder(), "");
+        assert_eq!(it.next().unwrap(), Token::Gold);
+        assert_eq!(it.slice(), "gold");
+        assert_eq!(it.span(), 21..25);
         assert_eq!(it.remainder(), "");
         assert!(it.peek().is_none());
         assert!(it.next().is_none());
