@@ -131,6 +131,14 @@ where
     {
         self.next_if(|next| next == expected)
     }
+
+    /// Returns inner lexer
+    ///
+    /// Inner lexer state can be like you already called [`Iterator::next`],
+    /// if you used one of `peek_*` or `next_if_*` methods
+    pub fn into_inner(self) -> L {
+        self.lexer
+    }
 }
 
 impl<'source, L, T> Clone for PeekableLexer<'source, L, T>
