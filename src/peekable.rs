@@ -235,7 +235,7 @@ where
     fn span(&self) -> Span {
         match &self.peeked {
             None => self.lexer.span(),
-            Some(Peeked { span, .. }) => span.clone(),
+            Some(Peeked { prev_span, .. }) => prev_span.clone(),
         }
     }
 
@@ -614,5 +614,29 @@ mod tests {
         assert_eq!(iter.try_for_each(Err), Err(Token::Four));
         assert_eq!(iter.peek(), None);
         assert_eq!(iter.try_for_each(Err), Ok(()));
+    }
+
+    #[test]
+    fn issue_1() {
+        fn parse_num(lex: &mut Lexer<Issue1Token>) -> u32 {
+            lex.slice().parse().unwrap()
+        }
+
+        #[derive(Debug, Logos, Eq, PartialEq)]
+        enum Issue1Token {
+            #[error]
+            Error,
+            #[regex(r"\d+", parse_num)]
+            I32Literal(u32),
+            #[token("+")]
+            Plus,
+        }
+
+        let mut l = Issue1Token::lexer("1+2").peekable_lexer();
+        assert_eq!(l.next(), Some(Issue1Token::I32Literal(1)));
+        assert_eq!(l.span(), 0..1);
+        assert_eq!(l.peek(), Some(&Issue1Token::Plus));
+        // since the lexer hasn't progressed, its span should be the same
+        assert_eq!(l.span(), 0..1);
     }
 }
