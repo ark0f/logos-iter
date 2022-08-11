@@ -1,5 +1,8 @@
 Format: vX.Y.Z (DD-MM-YYYY)
 
+# v0.1.3 (11-08-2022)
+Fix issue #1
+
 # v0.1.2 (11-09-2021)
 Add `PeekableLexer::into_inner` method
 
